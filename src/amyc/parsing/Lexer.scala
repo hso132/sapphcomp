@@ -4,6 +4,7 @@ package parsing
 import utils._
 import scala.io.Source
 import java.io.File
+import scala.collection.immutable.Stream;
 
 // The lexer for Amy.
 // Transforms an iterator coming from scala.io.Source to a stream of (Char, Position),
@@ -12,8 +13,8 @@ object Lexer extends Pipeline[List[File], Stream[Token]] {
   import Tokens._
 
   /** Maps a string s to the corresponding keyword,
-    * or None if it corresponds to no keyword
-    */
+   * or None if it corresponds to no keyword
+   */
   private def keywords(s: String): Option[Token] = s match {
     case "abstract" => Some(ABSTRACT())
     case "Boolean"  => Some(BOOLEAN())
@@ -55,33 +56,99 @@ object Lexer extends Pipeline[List[File], Stream[Token]] {
       source.toStream.map(c => (c, mkPos(source.pos))) #::: Stream((EndOfFile, mkPos(source.pos)))
 
     /** Gets rid of whitespaces and comments and calls readToken to get the next token.
-      * Returns the first token and the remaining input that did not get consumed
-      */
+     * Returns the first token and the remaining input that did not get consumed
+     */
     @scala.annotation.tailrec
-    def nextToken(stream: Stream[Input]): (Token, Stream[Input]) = {
+    def nextToken(stream: Stream[Input]): (Token, Stream[Input]) = 
+    {
       require(stream.nonEmpty)
 
+      
       val (currentChar, currentPos) #:: rest = stream
 
       // Use with care!
       def nextChar = rest.head._1
 
-      if (Character.isWhitespace(currentChar)) {
+      //get rid of whitespaces
+      if (Character.isWhitespace(currentChar)) 
+      {
         nextToken(stream.dropWhile{ case (c, _) => Character.isWhitespace(c) } )
-      } else if (currentChar == '/' && nextChar == '/') {
+      } 
+      else if (currentChar == '/' && nextChar == '/') 
+      {
         // Single-line comment
-        ???  // TODO
-      } else if (currentChar == '/' && nextChar == '*') {
-        // Multi-line comment
-        ???  // TODO
-      } else {
+        nextToken(stream.dropWhile{ case (c, _) => c != '\n'})
+      } 
+      else if (currentChar == '/' && nextChar == '*') 
+      {
+        destroyComments(stream) match
+        {
+          case (Some(b), nuStream) => 
+            ctx.reporter.error("Unclosed comment", b.position)
+            (b, nuStream);
+          case (None, nuStream) => nextToken(nuStream);
+        }
+      }
+      else
+      {
         readToken(stream)
       }
     }
 
+    //gets rid of all comments
+    //should only be called if the stream starts with a comment
+    def destroyComments(stream: Stream[Input]): (Option[Token],Stream[Input]) =
+    {
+      var eofBeforeClosing = false;
+
+      @scala.annotation.tailrec
+      def destroyCommentsAcc(stream: Stream[Input], openedComments: Int): Stream[Input] =
+      {
+        val (currentChar, currentPos) #:: rest = stream
+
+        // Use with care!
+        def nextChar = rest.head._1
+
+        if(currentChar == '/' && nextChar == '*')
+        {
+          //skip two characters, and recurse over the rest
+          destroyCommentsAcc(rest.tail, openedComments+1);
+        }
+        else if(openedComments == 0)
+        {
+          stream;
+        }
+        else if(currentChar == '*' && nextChar == '/')
+        {
+          destroyCommentsAcc(rest.tail, openedComments-1);
+        }
+        else if(currentChar == `EndOfFile` && openedComments > 0)
+        {
+          eofBeforeClosing = true;
+          stream
+        }
+        else
+        {
+          destroyCommentsAcc(rest, openedComments)
+        }
+
+      }
+
+      val str = destroyCommentsAcc(stream,0)
+      if(eofBeforeClosing)
+      {
+        (Some(BAD().setPos(stream.head._2)), str)
+      }
+      else
+      {
+        (None, str)
+      }
+
+
+    }
     /** Reads the next token from the stream. Assumes no whitespace or comments at the beginning.
-      * Returns the first token and the remaining input that did not get consumed.
-      */
+     * Returns the first token and the remaining input that did not get consumed.
+     */
     def readToken(stream: Stream[Input]): (Token, Stream[Input]) = {
       require(stream.nonEmpty)
 
@@ -95,34 +162,111 @@ object Lexer extends Pipeline[List[File], Stream[Token]] {
       // Returns input token with correct position and uses up two characters of the stream
       def useTwo(t: Token) = (t.setPos(currentPos), rest.tail)
 
-      currentChar match {
+      def throwOne() =
+      {
+        ctx.reporter.error("Invalid Token", currentPos);
+        useOne(BAD())
+      }
+      currentChar match 
+      {
         case `EndOfFile` => useOne(EOF())
 
         // Reserved word or Identifier
         case _ if Character.isLetter(currentChar) =>
-          val (wordLetters, afterWord) = stream.span { case (ch, _) =>
-            Character.isLetterOrDigit(ch) || ch == '_'
+          val (wordLetters, afterWord) = stream.span 
+          { 
+            case (ch, _) => Character.isLetterOrDigit(ch) || ch == '_'
           }
-          val word = wordLetters.map(_._1).mkString
+
+          val word: String = wordLetters.map(_._1).mkString
           // Hint: Decide if it's a letter or reserved word (use our infrastructure!),
           // and return the correct token, along with the remaining input stream.
           // Make sure you set the correct position for the token.
-          ???  // TODO
+          val token = keywords(word) match 
+          {
+            case Some(k) => k
+            case None => ID(word)
+          };
 
-        // Int literal
+          (token.setPos(currentPos), afterWord)
+          // Int literal
         case _ if Character.isDigit(currentChar) =>
           // Hint: Use a strategy similar to the previous example.
           // Make sure you fail for integers that do not fit 32 bits.
-          ???  // TODO
+          val (wordLetters, afterWord) = stream.span
+          {
+            case(ch, _) => Character.isDigit(ch)
+          }
+          val word: String = wordLetters.map(_._1).mkString;
 
-        // String literal
+          val token = try
+          {
+            val i = word.toInt;
+            INTLIT(i)
+          }
+          catch
+          {
+            case e: Exception => 
+              ctx.reporter.error("Invalid integer litteral", currentPos);
+              BAD()
+          }
+          (token.setPos(currentPos), afterWord)
+
+          // String literal
         case '"' =>
-          ???  // TODO
+          val (wordLetters, afterWord) = rest.span{case(ch,_) => ch != '"'};
+          val word = wordLetters.map(_._1).mkString;
+          val (token, trueRest) = afterWord match
+          {
+            case _ #:: tail => 
+              if(!word.contains('\n')) (STRINGLIT(word), tail)
+              else 
+              {
+                ctx.reporter.error("Unclosed string literal", currentPos);
+                (BAD(), afterWord)
+              }
+            case Stream.Empty => 
+              ctx.reporter.error("Unclosed string literal", currentPos);
+              (BAD(), Stream.Empty)
+          }
+          (token.setPos(currentPos), trueRest)
+          
 
-        case _ =>
-          ???  // TODO: Replace this catch-all by additional cases for other tokens
-               // (You can look at Tokens.scala for an exhaustive list of tokens)
-               // There should also be a case for all remaining (invalid) characters in the end
+        case '.' => useOne(DOT());
+        case '{' => useOne(LBRACE());
+        case '}' => useOne(RBRACE());
+        case '(' => useOne(LPAREN());
+        case ')' => useOne(RPAREN());
+        case '+' =>
+          if(nextChar == '+') useTwo(CONCAT());
+          else useOne(PLUS());
+        case ':' => useOne(COLON());
+        case ',' => useOne(COMMA());
+        case '=' => 
+          if(nextChar == '=') useTwo(EQUALS());
+          if(nextChar == '>') useTwo(RARROW());
+          else useOne(EQSIGN());
+
+        case ';' => useOne(SEMICOLON());
+        case '%' => useOne(MOD());
+        case '/' => useOne(DIV());
+        case '*' => useOne(TIMES());
+        case '|' => 
+          if(nextChar == '|') useTwo(OR());
+          else throwOne;
+        case '&' =>
+          if(nextChar == '&') useTwo(AND());
+          else throwOne;
+        case '!' => useOne(BANG());
+        case '-' => useOne(MINUS());
+        case '<' => 
+          if(nextChar == '=') useTwo(LESSEQUALS())
+          else useOne(LESSTHAN());
+
+        case '_' => useOne(UNDERSCORE());
+
+        
+        case _ => throwOne;
       }
     }
 
