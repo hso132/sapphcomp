@@ -77,11 +77,11 @@ object Lexer extends Pipeline[List[File], Stream[Token]] {
       else if (currentChar == '/' && nextChar == '/') 
       {
         // Single-line comment
-        nextToken(stream.dropWhile{ case (c, _) => c != '\n'})
+        nextToken(stream.dropWhile{ case (c, _) => c != '\n' && c!=`EndOfFile`})
       } 
       else if (currentChar == '/' && nextChar == '*') 
       {
-        destroyComments(stream) match
+        destroyComments(rest.tail) match
         {
           case (Some(b), nuStream) => 
             ctx.reporter.error("Unclosed comment", b.position)
@@ -107,8 +107,9 @@ object Lexer extends Pipeline[List[File], Stream[Token]] {
       {
         case '*' => 
           if(nextChar == '/') (None, rest.tail)
+          //nothing found
           else destroyComments(rest)
-        case `EndOfFile` => (Some(BAD()), rest)
+        case `EndOfFile` => (Some(BAD()), stream)
         case _ => destroyComments(rest)
       }
     }
