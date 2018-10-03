@@ -14,3 +14,4 @@
 
 hel*/
 //
+else foo

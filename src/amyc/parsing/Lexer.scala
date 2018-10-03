@@ -85,7 +85,7 @@ object Lexer extends Pipeline[List[File], Stream[Token]] {
         {
           case (Some(b), nuStream) => 
             ctx.reporter.error("Unclosed comment", b.position)
-            (b, nuStream);
+            (b.setPos(currentPos), nuStream);
           case (None, nuStream) => nextToken(nuStream);
         }
       }
@@ -95,56 +95,22 @@ object Lexer extends Pipeline[List[File], Stream[Token]] {
       }
     }
 
-    //gets rid of all comments
-    //should only be called if the stream starts with a comment
+    //gets rid of everything until it finds "*/"
+    //if it finds an end-of-file character, it returns a BAD token
+    @scala.annotation.tailrec
     def destroyComments(stream: Stream[Input]): (Option[Token],Stream[Input]) =
     {
-      var eofBeforeClosing = false;
+      val (currentChar, currentPos) #:: rest = stream;
+      def nextChar = rest.head._1
 
-      @scala.annotation.tailrec
-      def destroyCommentsAcc(stream: Stream[Input], openedComments: Int): Stream[Input] =
+      currentChar match
       {
-        val (currentChar, currentPos) #:: rest = stream
-
-        // Use with care!
-        def nextChar = rest.head._1
-
-        if(currentChar == '/' && nextChar == '*')
-        {
-          //skip two characters, and recurse over the rest
-          destroyCommentsAcc(rest.tail, openedComments+1);
-        }
-        else if(openedComments == 0)
-        {
-          stream;
-        }
-        else if(currentChar == '*' && nextChar == '/')
-        {
-          destroyCommentsAcc(rest.tail, openedComments-1);
-        }
-        else if(currentChar == `EndOfFile` && openedComments > 0)
-        {
-          eofBeforeClosing = true;
-          stream
-        }
-        else
-        {
-          destroyCommentsAcc(rest, openedComments)
-        }
-
+        case '*' => 
+          if(nextChar == '/') (None, rest.tail)
+          else destroyComments(rest)
+        case `EndOfFile` => (Some(BAD()), rest)
+        case _ => destroyComments(rest)
       }
-
-      val str = destroyCommentsAcc(stream,0)
-      if(eofBeforeClosing)
-      {
-        (Some(BAD().setPos(stream.head._2)), str)
-      }
-      else
-      {
-        (None, str)
-      }
-
-
     }
     /** Reads the next token from the stream. Assumes no whitespace or comments at the beginning.
      * Returns the first token and the remaining input that did not get consumed.
