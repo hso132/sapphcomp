@@ -1,0 +1,8 @@
+OBJECT()(1:1)
+ID(rekt)(1:8)
+LBRACE()(2:1)
+INTLIT(5)(3:3)
+DIV()(3:4)
+INTLIT(0)(3:5)
+RBRACE()(4:1)
+EOF()(4:2)

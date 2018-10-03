@@ -244,7 +244,7 @@ object Lexer extends Pipeline[List[File], Stream[Token]] {
         case ',' => useOne(COMMA());
         case '=' => 
           if(nextChar == '=') useTwo(EQUALS());
-          if(nextChar == '>') useTwo(RARROW());
+          else if(nextChar == '>') useTwo(RARROW());
           else useOne(EQSIGN());
 
         case ';' => useOne(SEMICOLON());
