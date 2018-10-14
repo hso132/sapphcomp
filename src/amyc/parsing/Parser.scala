@@ -64,14 +64,13 @@ object Parser extends Pipeline[Stream[Token], Program] {
     'OptExpr ::= 'Expr | epsilon(),
     'Definitions ::= 'Definition ~ 'Definitions | epsilon(),
     'Definition ::= 'AbstractClassDef | 'FunDef | 'CaseClassDef,
-    'AbstractClassDef ::= ABSTRACT() ~ CLASS() ~ 'Id,
     'FunDef ::= DEF() ~ 'Id ~ LPAREN() ~ 'Params ~ RPAREN() ~ COLON() ~ 'Type ~ EQSIGN() ~ LBRACE() ~ 'Expr ~ RBRACE(),
-    'CaseClassDef ::= CASE() ~ CLASS() ~ 'Id ~ LPAREN() ~ 'Params ~ RPAREN() ~ EXTENDS() ~ 'Id ~ 'OptId,
+    'AbstractClassDef ::= ABSTRACT() ~ CLASS() ~ 'Id,
+    'CaseClassDef ::= CASE() ~ CLASS() ~ 'Id ~ LPAREN() ~ 'Params ~ RPAREN() ~ EXTENDS() ~ 'Id,
 
-    'Expr ::= 'MatchExprOrValAssign ~ 'ExprConcatList,
-    'ExprConcatList ::= SEMICOLON() ~ 'MatchExprOrValAssign ~ 'ExprConcatList | epsilon(),
-    'MatchExprOrValAssign ::= 'MatchExpr | 'ValAssign,
-    'ValAssign ::= VAL() ~ 'ParamDef ~ EQSIGN() ~ 'MatchExpr,
+    'Expr ::= 'ValAssign ~ SEMICOLON() ~ 'Expr | 'MatchExpr ~ 'ExprConcatList,
+    'ExprConcatList ::= SEMICOLON() ~ 'Expr | epsilon(),
+    'ValAssign ::= VAL() ~ 'Param ~ EQSIGN() ~ 'MatchExpr,
 
     'MatchExpr ::= 'OrExpr ~ 'MatchList,
     'MatchList ::= 'Match ~ 'MatchList | epsilon(),
@@ -81,13 +80,15 @@ object Parser extends Pipeline[Stream[Token], Program] {
     'AndList ::= AND() ~ 'EqExpr ~ 'AndList | epsilon(),
     'EqExpr ::= 'CompExpr ~ 'EqList,
     'EqList ::= EQUALS() ~ 'CompExpr ~ 'EqList | epsilon(),
-    'CompExpr ::= 'Sum ~ 'CompList,
+    'CompExpr ::= 'AddExpr ~ 'CompList,
     'CompList ::= LESSEQUALS() ~ 'CompRest | LESSTHAN() ~ 'CompRest | epsilon(),
-    'CompRest ::= 'Sum ~ 'CompList,
-    'Sum ::= 'Term ~ 'TermList,
+    'CompRest ::= 'AddExpr ~ 'CompList,
+
+    'AddExpr ::= 'MultExpr ~ 'TermList,
     'TermList ::= PLUS() ~ 'TermRest | MINUS() ~ 'TermRest | CONCAT() ~ 'TermRest | epsilon(),
-    'TermRest ::= 'Term ~ 'TermList,
-    'Term ::= 'UnaryExpr ~ 'FactorList,
+    'TermRest ::= 'MultExpr ~ 'TermList,
+
+    'MultExpr ::= 'UnaryExpr ~ 'FactorList,
     'FactorList ::= TIMES() ~ 'RestFactor | DIV() ~ 'RestFactor | MOD() ~ 'RestFactor | epsilon(),
     'RestFactor ::= 'UnaryExpr ~ 'FactorList,
     'UnaryExpr ::= 'UnaryOp ~ 'StructExpr,
@@ -101,10 +102,11 @@ object Parser extends Pipeline[Stream[Token], Program] {
 
     'Match ::= MATCH() ~ LBRACE() ~ 'MatchCase ~ 'MatchCaseList ~ RBRACE(),
     'MatchCase ::= CASE() ~ 'Pattern ~ RARROW() ~ 'Expr, 
+    'MatchCaseList ::= 'MatchCase ~ 'MatchCaseList | epsilon(),
 
-    'Params ::= 'ParamDef ~ 'ParamDefList | epsilon(),
-    'ParamDefList ::= COMMA() ~ 'ParamDef ~ 'ParamDefList | epsilon(),
-    'ParamDef ::= 'Id ~ COLON() ~ 'Type,
+    'Params ::= 'Param ~ 'ParamDefList | epsilon(),
+    'ParamDefList ::= COMMA() ~ 'Param ~ 'ParamDefList | epsilon(),
+    'Param ::= 'Id ~ COLON() ~ 'Type,
     
     'Pattern ::= 'Id ~ 'CaseClassOrId | 'Literal | UNDERSCORE(),
     'CaseClassOrId ::= DOT() ~ 'Id ~ 'ParenPattern | 'ParenPattern | epsilon(),
@@ -113,7 +115,6 @@ object Parser extends Pipeline[Stream[Token], Program] {
     'PatternList ::= COMMA() ~ 'Pattern ~ 'PatternList | epsilon(),
 
     'Type ::= INT() | STRING() | BOOLEAN() | UNIT() | 'Id ~ 'OptId,
-    'MatchCaseList ::= 'MatchCase ~ 'MatchCaseList | epsilon(),
     'UnitOrExpr ::= 'Expr ~ RPAREN() | RPAREN(),
     'Literal ::= TRUE() | FALSE() | INTLITSENT | STRINGLITSENT,
     'OptFunCall ::= DOT() ~ 'Id ~ 'FunCall | 'FunCall | epsilon(),
