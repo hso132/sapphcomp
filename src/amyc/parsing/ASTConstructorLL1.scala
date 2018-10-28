@@ -66,7 +66,36 @@ class ASTConstructorLL1 extends ASTConstructor {
      case Node('ValAssign ::= _, List(_,paramDef,_, value)) => Let(constructParam(paramDef), constructExpr(value),body)
    }
  }
+ def constructMatch(scrut: Expr, pTree: NodeOrLeaf[Token]): Match = 
+ {
+   pTree match 
+   {
+     case Node('Match ::= _, List(_, _, matchCase, rest, _)) => Match(scrut, constructMatchCaseList(matchCase, rest)).setPos(scrut);
+   }
+ }
+def constructMatchCaseList(matchCase: NodeOrLeaf[Token], rest: NodeOrLeaf[Token]): List[MatchCase] = 
+{
+  val Node('MatchCase ::= List(CASE(), 'Pattern, RARROW(), 'Expr), List(_,pat,_,ex)) = matchCase;
 
+  val currPat = constructPattern(pat);
+  val currExpr = constructExpr(ex);
+  val currMatchCase = MatchCase(currPat,currExpr)
+  rest match
+  {
+    case Node(_ ::= List(), List()) => currMatchCase :: Nil;
+    case Node(_ ::= 'MatchCase :: _, List(newMatchCase, newRest)) => currMatchCase :: constructMatchCaseList(newMatchCase, newRest)
+  }
+}
+
+def constructPattern(pTree: NodeOrLeaf[Token]): Pattern =
+{
+  pTree match
+  {
+    case Node(_ ::= UNDERSCORE(), List(posMarker)) => WildcardPattern().setPos(posMarker)
+    case Node(_ ::= 'Literal, List(lit)) => constructLiteral(lit)
+    case Node(_ ::= 'Id :: _, )
+  }
+}
 
  override def constructType(pTree: NodeOrLeaf[Token]): TypeTree = 
  {
@@ -103,12 +132,13 @@ class ASTConstructorLL1 extends ASTConstructor {
        
      case Node('Expr ::= 'ValAssign :: _, List(valAssign, _, body)) =>
        constructLet(valAssign,constructExpr(body))
+
      case Node('MatchExpr ::= _, List(e1, el)) =>
        val expr1 = constructExpr(e1);
        (el: @unchecked) match
        {
          case Node('MatchList ::= List(), List()) => expr1
-         case Node('MatchList ::= List('Match,'MatchList), List(matcher, matchList)) => ???
+         case Node('MatchList ::= List('Match), List(matcher)) => constructMatch(expr1,matcher)
        }
 
      case Node('UnaryExpr ::= _, List(e1@Node(_,_),el)) =>

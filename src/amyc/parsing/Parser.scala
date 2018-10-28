@@ -73,7 +73,7 @@ object Parser extends Pipeline[Stream[Token], Program] {
     'ValAssign ::= VAL() ~ 'Param ~ EQSIGN() ~ 'MatchExpr,
 
     'MatchExpr ::= 'OrExpr ~ 'MatchList,
-    'MatchList ::= 'Match ~ 'MatchList | epsilon(),
+    'MatchList ::= 'Match | epsilon(),
     'OrExpr ::= 'AndExpr ~ 'OrList,
     'OrList ::= OR() ~ 'AndExpr ~ 'OrList | epsilon(),
     'AndExpr ::= 'EqExpr ~ 'AndList,
