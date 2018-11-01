@@ -142,7 +142,7 @@ override def constructExpr(pTree: NodeOrLeaf[Token]): Expr = {
       val rhs = splitExprList(exprConcatList)
       rhs match {
         case None => expr1
-        case Some(List(_,e2)) => Sequence(expr1, constructExpr(e2))
+        case Some(List(_,e2)) => Sequence(expr1, constructExpr(e2)).setPos(expr1)
       }
     case Node('Expr ::= 'ValAssign :: _, List(valAssign, _, body)) =>
       constructLet(valAssign,constructExpr(body))
@@ -177,27 +177,28 @@ override def constructExpr(pTree: NodeOrLeaf[Token]): Expr = {
       Ite(expr1,expr2,expr3).setPos(pt)
 
     // Literal
-    case Node('StructExpr::= List('Literal), List(litTree)) =>
+    case Node('StructExpr ::= List('Literal), List(litTree)) =>
       constructLiteral(litTree)
     // Error 
-    case Node('StructExpr::= ERROR() :: _, List(Leaf(err),_,e1,_)) =>
+    case Node('StructExpr ::= ERROR() :: _, List(Leaf(err),_,e1,_)) =>
       Error(constructExpr(e1)).setPos(err)
     // Function call or variable
-    case Node('StructExpr::= List('Id, 'OptFunCall), List(nid1,optfuncall)) => {
-      val id1 = extractId(nid1);
+    case Node('StructExpr::= List('Id, 'OptFunCall), List(id1,optfuncall)) => {
+      val id1Str = extractId(id1);
+      val posIndicator = extractPosIndicator(id1)
 
       optfuncall match {
         // Variable
-        case Node(_ ::= List(), List()) => Variable(id1)
+        case Node(_ ::= List(), List()) => Variable(id1Str).setPos(posIndicator)
         // Fully qualified Name => function call
         case Node(_ ::= DOT() :: _, List(_,id2, funcall)) => 
           val id2Str = extractId(id2);
           val args = getFunCallArgs(funcall);
-          Call(QualifiedName(Some(id1),id2Str),args)
+          Call(QualifiedName(Some(id1Str),id2Str),args).setPos(posIndicator)
         // Function call
         case Node(_ ::= List('FunCall), List(funcall)) =>
       val args = getFunCallArgs(funcall);
-      Call(QualifiedName(None, id1),args)
+      Call(QualifiedName(None, id1Str),args).setPos(posIndicator)
       }
     }
 
@@ -214,6 +215,13 @@ override def constructExpr(pTree: NodeOrLeaf[Token]): Expr = {
     //binary operations
     case Node( sym ::= _, List(e1,el)) =>
       exprListToExpr(e1,el)
+  }
+}
+
+def extractPosIndicator(ptree: NodeOrLeaf[Token]): Positioned = {
+  ptree match {
+    case Node(_, List(Leaf(posIndicator))) => posIndicator
+    case Leaf(posIndicator) => posIndicator
   }
 }
 
