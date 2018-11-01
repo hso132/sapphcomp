@@ -28,16 +28,8 @@ class ASTConstructorLL1 extends ASTConstructor {
  }
  def exprListToExpr(left: NodeOrLeaf[Token], right: NodeOrLeaf[Token]): Expr = 
  {
-
-   val rhs = splitExprList(right);
    val expr1 = constructExpr(left);
-   rhs match
-   {
-     case None => expr1;
-     case Some(List(op, e2)) => 
-       val expr2 = constructExpr(e2);
-       constructOp(op)(expr1,expr2).setPos(expr1);
-   }
+   constructOpExpr(expr1, right);
  }
 
 
@@ -87,13 +79,45 @@ def constructMatchCaseList(matchCase: NodeOrLeaf[Token], rest: NodeOrLeaf[Token]
   }
 }
 
-def constructPattern(pTree: NodeOrLeaf[Token]): Pattern =
+override def constructPattern(pTree: NodeOrLeaf[Token]): Pattern =
 {
   pTree match
   {
-    case Node(_ ::= UNDERSCORE(), List(posMarker)) => WildcardPattern().setPos(posMarker)
-    case Node(_ ::= 'Literal, List(lit)) => constructLiteral(lit)
-    case Node(_ ::= 'Id :: _, )
+    case Node(_ ::= UNDERSCORE()::Nil, List(Leaf(posMarker))) => 
+      WildcardPattern().setPos(posMarker)
+    case Node(_ ::= List('Literal), List(lit)) => LiteralPattern(constructLiteral(lit))
+    case Node(_ ::= List(LPAREN(),RPAREN()), List(l,_)) => 
+      LiteralPattern(UnitLiteral())
+    case Node(_ ::= 'Id :: _, List(id1, restPatternOrQname)) =>
+      restPatternOrQname match 
+      {
+        case Node(_ ::= DOT() :: _, List(_, id2, parenPattern)) => 
+          val id1Str = extractId(id1);
+          val id2Str = extractId(id2);
+          val qName = QualifiedName(Some(id1Str), id2Str);
+          val Node('ParenPattern ::= _, List(_, patterns,_)) = parenPattern;
+          val patternList: List[Pattern] = constructPatterns(patterns);
+          CaseClassPattern(qName, patternList)
+        case Node(_ ::= List('ParenPattern), List(parenPattern)) =>
+          val qName = QualifiedName(None, extractId(id1));
+          val Node('ParenPattern ::= _, List(_, patterns,_)) = parenPattern;
+          val patternList: List[Pattern] = constructPatterns(patterns);
+          CaseClassPattern(qName, patternList)
+        case Node(_ ::= List(), List()) => IdPattern(extractId(id1))
+      }
+  }
+}
+
+def constructPatterns(pTree: NodeOrLeaf[Token]): List[Pattern] =
+{
+  pTree match 
+  {
+    case Node('Patterns ::= List(), List()) => Nil;
+    case Node('Patterns ::= 'Pattern :: _, List(pat, rest)) => 
+      constructPattern(pat) :: constructPatterns(rest);
+    case Node('PatternList ::= List(), List()) => Nil;
+    case Node('PatternList ::= COMMA() :: _, List(_, pat, rest)) =>
+      constructPattern(pat) :: constructPatterns(rest);
   }
 }
 
@@ -138,7 +162,8 @@ def constructPattern(pTree: NodeOrLeaf[Token]): Pattern =
        (el: @unchecked) match
        {
          case Node('MatchList ::= List(), List()) => expr1
-         case Node('MatchList ::= List('Match), List(matcher)) => constructMatch(expr1,matcher)
+         case Node('MatchList ::= List('Match), List(matcher)) =>
+           constructMatch(expr1,matcher)
        }
 
      case Node('UnaryExpr ::= _, List(e1@Node(_,_),el)) =>
@@ -146,8 +171,14 @@ def constructPattern(pTree: NodeOrLeaf[Token]): Pattern =
        lazy val expr = constructExpr(el);
        e1 match
        {
+         // No operator
          case Node( _ ::= List(), List()) =>expr
-         case Node( _ ::= List(_), List(Leaf(p))) =>expr.setPos(p)
+         // An operator is present
+         case Node( _ ::= List(_), List(Leaf(p))) =>
+           (p: @unchecked) match {
+             case BANG() => Not(expr).setPos(p)
+             case MINUS() => Neg(expr).setPos(p)
+           }
        };
      }
 
@@ -158,7 +189,10 @@ def constructPattern(pTree: NodeOrLeaf[Token]): Pattern =
        Ite(expr1,expr2,expr3).setPos(pt)
     
      //literal
-     case Node('StructExpr::= List('Literal), List(litTree)) => constructLiteral(litTree)
+     case Node('StructExpr::= List('Literal), List(litTree)) =>
+       constructLiteral(litTree)
+     case Node('StructExpr::= ERROR() :: _, List(Leaf(err),_,e1,_)) =>
+       Error(constructExpr(e1)).setPos(err)
      //function call or variable
      case Node('StructExpr::= List('Id, 'OptFunCall), List(nid1,optfuncall)) => 
      {
@@ -172,19 +206,22 @@ def constructPattern(pTree: NodeOrLeaf[Token]): Pattern =
            val id2 = extractId(nid2);
            val args = getFunCallArgs(funcall);
            Call(QualifiedName(Some(id1),id2),args)
+         case Node(_ ::= List('FunCall), List(funcall)) =>
+             val args = getFunCallArgs(funcall);
+             Call(QualifiedName(None, id1),args)
        }
      }
+     case Node('StructExpr ::= LPAREN() :: _, List(Leaf(lparen), unitOrParenExpr)) =>
+       unitOrParenExpr match {
+         case Node(_ ::= List(RPAREN()), List(_)) => UnitLiteral().setPos(lparen);
+         case Node(_ ::= 'Expr :: _, List(e1,_)) => constructExpr(e1);
+       }
+     case Node('BraceExpr ::= List(LBRACE(), 'Expr, RBRACE()), List(_,e1,_)) =>
+       constructExpr(e1)
+
      //binary operations
      case Node( sym ::= _, List(e1,el)) =>
        exprListToExpr(e1,el)
-
-
-     //better stack trace
-     case Node(l1,l2) =>
-       println(l1);
-       println(l2);
-       throw new scala.MatchError
-
    }
  }
 
@@ -227,7 +264,7 @@ def constructPattern(pTree: NodeOrLeaf[Token]): Pattern =
      case Node(_, List()) => //epsilon rule of the nonterminals
        leftopd
      case Node(sym ::= _, List(op, rightNode))
-     if Set('OrExpr, 'AndExpr, 'EqExpr, 'CompExpr, 'AddExpr, 'MultExpr) contains sym =>
+     if Set('OrList, 'AndList, 'EqList, 'CompList, 'TermList, 'FactorList) contains sym =>
        rightNode match {
          case Node(_, List(nextOpd, suf)) => // 'Expr? ::= Expr? ~ 'OpExpr,
            val nextAtom = constructExpr(nextOpd)
