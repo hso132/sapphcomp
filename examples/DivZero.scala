@@ -1,4 +1,7 @@
 object rekt
 {
+  abstract class hi
+  case class h() extends hi
+  def hello(): Int = {0}
   5/0
 }
