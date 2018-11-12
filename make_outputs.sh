@@ -2,5 +2,7 @@
 
 for file in `ls examples`
 do
-	java -cp amyc_2.12-1.5.jar amyc.Main --printTrees examples/$file >  test/resources/parser/outputs/"${file%%.*}.txt"
+	fileName=${file%%.*}
+	java -cp amyc_2.12-1.5.jar amyc.Main --printNames library/* examples/$file >  test/resources/names/outputs/"$fileName.txt"
+	echo "@Test def test$fileName = shouldOutput(\"$fileName\");"
 done

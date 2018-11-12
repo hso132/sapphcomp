@@ -1,18 +1,20 @@
 package amyc.test
 
+import amyc._
 import amyc.parsing._
+import amyc.utils._
+import amyc.ast._
 import org.junit.Test
 
-class LexerTests extends TestSuite {
-  val pipeline = Parser;
+class ParserTests extends TestSuite with MainHelpers {
+  val p0 = Lexer andThen Parser andThen treePrinterN("Trees after parsing");
+  val pipeline = p0;
   val baseDir = "parser"
 
   val outputExt = "txt"
 
-  @Test def testKeywords = shouldOutput("Keywords")
   @Test def testHello = shouldOutput("Hello");
   @Test def testArith = shouldOutput("Arithmetic");
-  @Test def badCommentTest = shouldOutput("BadComment");
   @Test def test_DivZero = shouldOutput("DivZero")
   @Test def test_EqualityTests = shouldOutput("EqualityTests")
   @Test def test_Factorial = shouldOutput("Factorial")
@@ -23,7 +25,4 @@ class LexerTests extends TestSuite {
   @Test def test_Printing = shouldOutput("Printing")
   @Test def test_TestLists = shouldOutput("TestLists")
   @Test def test_TreeSet = shouldOutput("TreeSet")
-
-  @Test def testSingleAmp = shouldFail("SingleAmp")
-
 }

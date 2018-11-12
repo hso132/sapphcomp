@@ -62,7 +62,7 @@ class ASTConstructorLL1 extends ASTConstructor {
       val Node('MatchCase ::=  CASE() :: _ , List(_, pat, _, ex)) = matchCase;
       val currPat = constructPattern(pat);
       val currExpr = constructExpr(ex);
-      val currMatchCase = MatchCase(currPat,currExpr);
+      val currMatchCase = MatchCase(currPat,currExpr).setPos(currPat);
       rest match {
         case Node(_ ::= Nil, Nil) => currMatchCase :: Nil;
         case Node(_ ::= 'MatchCase :: _, List(newMatchCase, newRest)) =>
@@ -76,31 +76,35 @@ override def constructPattern(pTree: NodeOrLeaf[Token]): Pattern = {
     case Node(_ ::= UNDERSCORE()::Nil, List(Leaf(posMarker))) => 
       WildcardPattern().setPos(posMarker)
       // Literal
-    case Node(_ ::= List('Literal), List(lit)) => LiteralPattern(constructLiteral(lit))
+    case Node(_ ::= List('Literal), List(Leaf(lit))) =>
+      LiteralPattern(constructLiteral(Leaf(lit))).setPos(lit)
     // Unit Literal
-    case Node(_ ::= List(LPAREN(),RPAREN()), List(l,_)) => 
-      LiteralPattern(UnitLiteral())
+    case Node(_ ::= List(LPAREN(),RPAREN()), List(Leaf(l),_)) => 
+      LiteralPattern(UnitLiteral()).setPos(l);
 
       // Stuff that starts with an ID
-    case Node(_ ::= 'Id :: _, List(id1, restPatternOrQname)) =>
+    case Node(_ ::= 'Id :: _, List(id1, restPatternOrQname)) => {
+      val Node('Id ::= _, List(Leaf(posIndicator))) = id1;
       restPatternOrQname match {
-        // Fully qualified name => function call
-    case Node(_ ::= DOT() :: _, List(_, id2, parenPattern)) => 
-      val id1Str = extractId(id1);
-      val id2Str = extractId(id2);
-      val qName = QualifiedName(Some(id1Str), id2Str);
-      val Node('ParenPattern ::= _, List(_, patterns,_)) = parenPattern;
-      val patternList: List[Pattern] = constructPatterns(patterns);
-      CaseClassPattern(qName, patternList)
-      // Function call only
-    case Node(_ ::= List('ParenPattern), List(parenPattern)) =>
-      val qName = QualifiedName(None, extractId(id1));
-      val Node('ParenPattern ::= _, List(_, patterns,_)) = parenPattern;
-      val patternList: List[Pattern] = constructPatterns(patterns);
-      CaseClassPattern(qName, patternList)
-      // Nothing => was just an ID
-    case Node(_ ::= List(), List()) => IdPattern(extractId(id1))
+        // Fully qualified name => constructor call
+        case Node(_ ::= DOT() :: _, List(_, id2, parenPattern)) => 
+          val id1Str = extractId(id1);
+          val id2Str = extractId(id2);
+          val qName = QualifiedName(Some(id1Str), id2Str);
+          val Node('ParenPattern ::= _, List(_, patterns,_)) = parenPattern;
+          val patternList: List[Pattern] = constructPatterns(patterns);
+          CaseClassPattern(qName, patternList).setPos(posIndicator)
+          // Constructor call only
+        case Node(_ ::= List('ParenPattern), List(parenPattern)) =>
+          val qName = QualifiedName(None, extractId(id1));
+          val Node('ParenPattern ::= _, List(_, patterns,_)) = parenPattern;
+          val patternList: List[Pattern] = constructPatterns(patterns);
+          CaseClassPattern(qName, patternList).setPos(posIndicator)
+          // Nothing => was just an ID
+        case Node(_ ::= List(), List()) => 
+          IdPattern(extractId(id1)).setPos(posIndicator)
       }
+    }
   }
 }
 

@@ -117,9 +117,14 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
         S.AbstractClassDef(id)
       case N.CaseClassDef(name, fields, _) =>
         val Some((id,sig)) = table.getConstructor(module,name)
+        if(fields.size != sig.argTypes.size) {
+          fatal(s"Wrong number of arguments for constructor $name", df.position)
+        }
         S.CaseClassDef(
           id,
-          sig.argTypes.map(t => S.TypeTree(t)).zip(fields).map{case (tt0, tt1)=>tt0.setPos(tt1)},
+          sig.argTypes.map(t => S.TypeTree(t))
+            .zip(fields)
+            .map{case (tt0, tt1)=>tt0.setPos(tt1)},
           sig.parent)
       case fd: N.FunDef =>
         transformFunDef(fd, module)
@@ -152,6 +157,21 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
       ).setPos(fd)
     }
 
+    def transformLiteral(lit: N.Literal[_]) = {
+      lit match {
+        case N.IntLiteral(i) => S.IntLiteral(i)
+        case N.BooleanLiteral(b) => S.BooleanLiteral(b)
+        case N.StringLiteral(s) => S.StringLiteral(s)
+        case N.UnitLiteral() => S.UnitLiteral()
+      }
+    }
+    def getName(qname: N.QualifiedName, module: String) = {
+      val owner = qname.module match {
+        case Some(s) => s
+        case None => module
+      }
+      (owner,qname.name)
+    }
     // This function takes as implicit a pair of two maps:
     // The first is a map from names of parameters to their unique identifiers,
     // the second is similar for local variables.
@@ -170,23 +190,38 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
               case N.IdPattern(name) => 
                 val s = Identifier.fresh(name);
                 (S.IdPattern(s), List((name,s)))
-              case _ => ???
+              case N.LiteralPattern(lit) => (S.LiteralPattern(transformLiteral(lit)), Nil)
+              case N.CaseClassPattern(qname, fields) => 
+                val (owner, name) = getName(qname, module);
+                val id = table.getConstructor(owner, name) match {
+                  case Some((sym,_)) => sym
+                  case None => 
+                    fatal(s"Could not find constructor $qname", pat.position)
+                }
+                val (newFields, newNames) = fields.map(transformPattern).unzip;
+                val finalNames = newNames.flatten;
+                finalNames.groupBy(_._1).foreach{ case (name,names) =>
+                  if(names.size > 1) {
+                    fatal(s"Duplicate name $name in pattern", pat.position)
+                  }
+                }
+                (S.CaseClassPattern(id,newFields), finalNames)
+
+
             }
           }
 
           def transformCase(cse: N.MatchCase) = {
             val N.MatchCase(pat, rhs) = cse
             val (newPat, moreLocals) = transformPattern(pat)
-            ???  // TODO
+            val newExpr = transformExpr(rhs)(module, (params,locals++moreLocals))
+            S.MatchCase(newPat, newExpr)
           }
 
           S.Match(transformExpr(scrut), cases.map(transformCase))
 
         // Literals
-        case N.IntLiteral(i) => S.IntLiteral(i)
-        case N.BooleanLiteral(b) => S.BooleanLiteral(b)
-        case N.StringLiteral(s) => S.StringLiteral(s)
-        case N.UnitLiteral() => S.UnitLiteral()
+        case lt:N.Literal[_] => transformLiteral(lt)
 
         // Binary Operations
         case N.Plus(lhs,rhs) => S.Plus(transformExpr(lhs),transformExpr(rhs))
@@ -206,11 +241,7 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
         case N.Neg(e) => S.Neg(transformExpr(e))
 
         case N.Call(qname, args) =>
-          val owner = qname.module match {
-            case Some(n) => n
-            case None => module
-          }
-          val name = qname.name;
+          val (owner,name) = getName(qname, module);
           val id = (table.getFunction(owner,name), table.getConstructor(owner,name)) match {
             case (Some((sym,sig)),_) => sym
             case (_, Some((sym,sig))) => sym
@@ -224,6 +255,10 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
           
           val s = Identifier.fresh(df.name)
           val sParamDef = S.ParamDef(s, S.TypeTree(transformType(df.tt, module)).setPos(df.tt));
+          if(params contains df.name) {
+            warning(s"Value definition ${df.name} shadows function parameter",
+              df.position);
+          }
           S.Let(sParamDef,
             transformExpr(value),
             transformExpr(body)(module, (params, locals + (df.name -> s)))
@@ -232,12 +267,15 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
         case N.Ite(cond, thenn, elze) =>
           S.Ite(transformExpr(cond), transformExpr(thenn), transformExpr(elze))
         case N.Error(msg) => S.Error(transformExpr(msg))
-
-
-
-        case _ =>
-          println(expr);
-          ???  // TODO: Implement the rest of the cases
+        case N.Variable(name) => 
+          val iden = (params.get(name), locals.get(name)) match {
+            case (Some(_),Some(id)) => id
+            case (None, Some(id)) => id
+            case (Some(id), None) => id
+            case (None, None) =>
+              fatal(s"Value $name undeclared in scope", expr.position)
+          }
+          S.Variable(iden)
       }
       res.setPos(expr)
     }
