@@ -188,13 +188,32 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
             pat match {
               case N.WildcardPattern() => (S.WildcardPattern(), Nil)
               case N.IdPattern(name) => 
+                if(locals contains name) {
+                  fatal(s"Pattern identifier $name already defined", pat.position)
+                }
+                table.getConstructor(module,name) match {
+                  case Some((sym,sig)) =>
+                    val ctrString = sig.argTypes.mkString(", ");
+                    warning(s"Constructor $name($ctrString) exists; did you mean to use it?"
+                      .stripMargin
+                      .replaceAll("\n", " "),
+                      pat.position);
+                  case _ =>
+                }
                 val s = Identifier.fresh(name);
                 (S.IdPattern(s), List((name,s)))
+
               case N.LiteralPattern(lit) => (S.LiteralPattern(transformLiteral(lit)), Nil)
               case N.CaseClassPattern(qname, fields) => 
                 val (owner, name) = getName(qname, module);
                 val id = table.getConstructor(owner, name) match {
-                  case Some((sym,_)) => sym
+                  case Some((sym,sig)) => 
+                    if(sig.argTypes.size != fields.size) {
+                      fatal(
+                        s"Case class $qname expects ${sig.argTypes.size} arguments, found ${fields.size}",
+                        pat.position)
+                    }
+                    sym
                   case None => 
                     fatal(s"Could not find constructor $qname", pat.position)
                 }
@@ -243,8 +262,20 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
         case N.Call(qname, args) =>
           val (owner,name) = getName(qname, module);
           val id = (table.getFunction(owner,name), table.getConstructor(owner,name)) match {
-            case (Some((sym,sig)),_) => sym
-            case (_, Some((sym,sig))) => sym
+            case (Some((sym,sig)),_) =>
+              if(sig.argTypes.size != args.size) {
+                fatal(
+                  s"Function $qname expects ${sig.argTypes.size} arguments, found ${args.size}",
+                  expr.position);
+              }
+              sym
+            case (None, Some((sym,sig))) => 
+              if(sig.argTypes.size != args.size) {
+                fatal(
+                  s"Constructor $qname expects ${sig.argTypes.size} arguments, found ${args.size}",
+                  expr.position)
+              }
+              sym
             case _ =>
               fatal(s"Could not find function or constructor $name in module $owner", expr)
           }
@@ -255,6 +286,9 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
           
           val s = Identifier.fresh(df.name)
           val sParamDef = S.ParamDef(s, S.TypeTree(transformType(df.tt, module)).setPos(df.tt));
+          if(locals contains df.name) {
+            fatal(s"Value redefinition: ${df.name}", df.position);
+          }
           if(params contains df.name) {
             warning(s"Value definition ${df.name} shadows function parameter",
               df.position);

@@ -1,7 +1,13 @@
 object rekt
 {
   abstract class hi
-  case class h() extends hi
-  def hello(): Int = {0}
+  case class h(o: Int,b: String) extends hi
+  def hello(): Int = {
+    val hi: Int = 0;
+    5 match {
+      case h => 0
+    };
+    0
+  }
   5/0
 }
