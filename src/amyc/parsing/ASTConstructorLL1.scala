@@ -41,14 +41,14 @@ class ASTConstructorLL1 extends ASTConstructor {
     rhs match {
       case None => Sequence(l, e2).setPos(l)
       case Some(List(_,next_e2, next_el)) =>
-        Sequence(l, constructSequence(l, constructExpr(next_e2),next_el))
+        Sequence(l, constructSequence(l, constructExpr(next_e2),next_el)).setPos(l)
     }
   }
 
   def constructLet(pTree: NodeOrLeaf[Token], body: Expr): Let = {
     // The non-terminal only has one child
-    val Node('ValAssign ::= _, List(_,paramDef,_, value)) = pTree;
-    Let(constructParam(paramDef), constructExpr(value),body)
+    val Node('ValAssign ::= _, List(Leaf(vt),paramDef,_, value)) = pTree;
+    Let(constructParam(paramDef), constructExpr(value),body).setPos(vt)
   }
 
   def constructMatch(scrut: Expr, pTree: NodeOrLeaf[Token]): Match = {
@@ -123,17 +123,18 @@ def constructPatterns(pTree: NodeOrLeaf[Token]): List[Pattern] = {
 // Constructs a type
 override def constructType(pTree: NodeOrLeaf[Token]): TypeTree = {
   pTree match {
-    case Node('Type ::= _, List(Leaf(tp))) =>
+    case Node('Type ::= _, List(_)) =>
       super.constructType(pTree)
     case Node('Type ::= _, List(id,optid)) =>
       val id1 = extractId(id);
+      val posIndicator = extractPosIndicator(id);
       optid match
       {
         case Node('OptId ::= List(),List()) => 
-          TypeTree(ClassType(QualifiedName(None, id1)))
+          TypeTree(ClassType(QualifiedName(None, id1))).setPos(posIndicator)
         case Node('OptId ::= List(DOT(), 'Id), List(_, extendId)) =>
           val id2 = extractId(extendId);
-          TypeTree(ClassType(QualifiedName(Some(id1),id2)))
+          TypeTree(ClassType(QualifiedName(Some(id1),id2))).setPos(posIndicator)
       }
   }
 }

@@ -77,7 +77,7 @@ object Lexer extends Pipeline[List[File], Stream[Token]] {
       else if (currentChar == '/' && nextChar == '/') 
       {
         // Single-line comment
-        nextToken(stream.dropWhile{ case (c, _) => c != '\n' && c!=`EndOfFile`})
+        nextToken(stream.dropWhile{ case (c, _) => c != '\n' && c!='\r' && c!=`EndOfFile`})
       } 
       else if (currentChar == '/' && nextChar == '*') 
       {
@@ -186,7 +186,9 @@ object Lexer extends Pipeline[List[File], Stream[Token]] {
           val (token, trueRest) = afterWord match
           {
             case _ #:: tail => 
-              if(!word.contains('\n')) (STRINGLIT(word), tail)
+              if((!word.contains('\r')) &&
+                !word.contains('\n')) 
+              (STRINGLIT(word), tail)
               else 
               {
                 ctx.reporter.error("Unclosed string literal", currentPos);

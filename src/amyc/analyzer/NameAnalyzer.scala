@@ -40,6 +40,7 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
             case Some(symbol) =>
               S.ClassType(symbol)
             case None =>
+              assert(tt.hasPosition)
               fatal(s"Could not find type $qn", tt)
           }
       }
