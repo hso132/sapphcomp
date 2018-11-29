@@ -54,7 +54,9 @@ class ASTConstructorLL1 extends ASTConstructor {
   def constructMatch(scrut: Expr, pTree: NodeOrLeaf[Token]): Match = {
     // Non-terminal only has one child
     val Node('Match ::= _, List(_, _, matchCase, rest, _)) = pTree;
-    Match(scrut, constructMatchCaseList(matchCase, rest)).setPos(scrut);
+    val matchCaseList = constructMatchCaseList(matchCase, rest)
+    assert(matchCaseList.forall(_.hasPosition))
+    Match(scrut, matchCaseList).setPos(scrut);
   }
 
   def constructMatchCaseList(matchCase: NodeOrLeaf[Token], 

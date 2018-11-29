@@ -5,29 +5,21 @@ object TreeSet
     case class Leaf() extends TreeNode
 
 
-    def insert(tree: TreeNode, i: Int): TreeNode =
-    {
-      tree match
-      {
+    def insert(tree: TreeNode, i: Int): TreeNode = {
+      tree match {
         case Leaf() => Node(i, Leaf(), Leaf())
         case Node(v,l,r) => 
           //i goes to the right
-          if(v<i)
-          {
+          if(v<i) {
             val rNode: TreeNode = insert(r,i);
             Node(v,l,rNode)
-          }
-          else
-          {
+          } else {
             //i goes to the left
-            if(i<v)
-            {
+            if(i<v) { 
               val lNode: TreeNode = insert(l,i);
               Node(v,lNode,r)
-            }
-            //i IS v
-            else
-            {
+            } //i IS v
+            else {
               tree
             }
           }

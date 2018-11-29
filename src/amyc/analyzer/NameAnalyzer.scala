@@ -115,18 +115,17 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
     def transformDef(df: N.ClassOrFunDef, module: String): S.ClassOrFunDef = { df match {
       case N.AbstractClassDef(name) =>
         val Some(id) = table.getType(module, name)
-        S.AbstractClassDef(id)
+        S.AbstractClassDef(id).setPos(df);
       case N.CaseClassDef(name, fields, _) =>
         val Some((id,sig)) = table.getConstructor(module,name)
         if(fields.size != sig.argTypes.size) {
           fatal(s"Wrong number of arguments for constructor $name", df.position)
         }
-        S.CaseClassDef(
-          id,
+        S.CaseClassDef(id,
           sig.argTypes.map(t => S.TypeTree(t))
             .zip(fields)
             .map{case (tt0, tt1)=>tt0.setPos(tt1)},
-          sig.parent)
+            sig.parent)
       case fd: N.FunDef =>
         transformFunDef(fd, module)
     }}.setPos(df)
@@ -165,7 +164,7 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
         case N.StringLiteral(s) => S.StringLiteral(s)
         case N.UnitLiteral() => S.UnitLiteral()
       }
-    }
+    }.setPos(lit)
     def getName(qname: N.QualifiedName, module: String) = {
       val owner = qname.module match {
         case Some(s) => s
@@ -186,7 +185,7 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
           // from strings to unique identifiers for names bound in the pattern.
           // Also, calls 'fatal' if a new name violates the Amy naming rules.
           def transformPattern(pat: N.Pattern): (S.Pattern, List[(String, Identifier)]) = {
-            pat match {
+            val (noPosPattern, names) = pat match {
               case N.WildcardPattern() => (S.WildcardPattern(), Nil)
               case N.IdPattern(name) => 
                 if(locals contains name) {
@@ -226,16 +225,15 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
                   }
                 }
                 (S.CaseClassPattern(id,newFields), finalNames)
-
-
             }
+            (noPosPattern.setPos(pat),names)
           }
 
           def transformCase(cse: N.MatchCase) = {
             val N.MatchCase(pat, rhs) = cse
             val (newPat, moreLocals) = transformPattern(pat)
             val newExpr = transformExpr(rhs)(module, (params,locals++moreLocals))
-            S.MatchCase(newPat, newExpr)
+            S.MatchCase(newPat, newExpr).setPos(cse)
           }
 
           S.Match(transformExpr(scrut), cases.map(transformCase))
