@@ -83,6 +83,7 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
           Constraint(bodyType, expected, e.position) :: 
             genConstraints(value, tt.tpe) ++ genConstraints(body, bodyType)(env+(name->tt.tpe))
 
+        // Binary operations on integers
         case Times(lhs, rhs) =>
           binaryIntConstraints(lhs,rhs)
         case Mod(lhs, rhs) =>
@@ -93,16 +94,23 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
           binaryIntConstraints(lhs,rhs)
         case Minus(lhs, rhs) =>
           binaryIntConstraints(lhs,rhs)
+
+        // Concatenation
         case Concat(lhs,rhs) => 
           Constraint(StringType, expected, e.position) :: genConstraints(lhs,StringType) ++ genConstraints(rhs,StringType)
+
+        // Comparision constraints
         case LessThan(lhs, rhs) =>
           compConstraints(lhs,rhs)
         case LessEquals(lhs, rhs) =>
           compConstraints(lhs,rhs)
+
+        // Sequence; only the second type needs to match expected
         case Sequence(e1,e2) =>
           val e1Type = TypeVariable.fresh;
           val e2Type = TypeVariable.fresh;
           Constraint(e2Type, expected, e2.position) :: genConstraints(e1, e1Type) ++ genConstraints(e2, e2Type)
+
         case Match(scrut, cases) =>
           // Returns additional constraints from within the pattern with all bindings
           // from identifiers to types for names bound in the pattern.
