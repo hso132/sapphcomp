@@ -17,21 +17,21 @@ class NameTests extends TestSuite  with MainHelpers {
 
   val baseDir = "names"
   val outputExt = "txt"
-
-  @Test def testArithmetic = shouldOutput("Arithmetic");
-  @Test def testAssocTest = shouldOutput("AssocTest");
-  @Test def testDivZero = shouldOutput("DivZero");
-  @Test def testEqualityTests = shouldOutput("EqualityTests");
-  @Test def testFactorial = shouldOutput("Factorial");
-  @Test def testHanoi = shouldOutput("Hanoi");
-  @Test def testHelloInt = shouldOutput("HelloInt");
-  @Test def testHello = shouldOutput("Hello");
-  @Test def testMegaPattern = shouldOutput("MegaPattern");
-  @Test def testPascal = shouldOutput("Pascal");
-  @Test def testPrinting = shouldOutput("Printing");
-  @Test def testTestLists = shouldOutput("TestLists");
-  @Test def testTreeSet = shouldOutput("TreeSet");
-
+  val libs: List[String] = "Std" :: "Option" :: "List" :: Nil;         
+  @Test def testArithmetic = shouldOutput("Arithmetic" :: libs, "Arithmetic");           
+  @Test def testAssocTest = shouldOutput("AssocTest" :: libs, "AssocTest");              
+  @Test def testDivZero = shouldOutput("DivZero" :: libs, "DivZero");                    
+  @Test def testEqualityTests = shouldOutput("EqualityTests" :: libs, "EqualityTests");  
+  @Test def testFactorial = shouldOutput("Factorial" :: libs, "Factorial");              
+  @Test def testHanoi = shouldOutput("Hanoi" :: libs, "Hanoi");                          
+  @Test def testHelloInt = shouldOutput("HelloInt" :: libs, "HelloInt");                 
+  @Test def testHello = shouldOutput("Hello" :: libs, "Hello");                          
+  @Test def testMegaPattern = shouldOutput("MegaPattern" :: libs, "MegaPattern");        
+  @Test def testName = shouldOutput("Name" :: libs, "Name");                             
+  @Test def testPascal = shouldOutput("Pascal" :: libs, "Pascal");                       
+  @Test def testPrinting = shouldOutput("Printing" :: libs, "Printing");                 
+  @Test def testTestLists = shouldOutput("TestLists" :: libs, "TestLists");              
+  @Test def testTreeSet = shouldOutput("TreeSet" :: libs, "TreeSet");                    
 }
 
 

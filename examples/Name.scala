@@ -1,4 +1,4 @@
 object lol {
-  val h: Int = "hit"
+  val h: Int = "hit";
   h == 5
 }

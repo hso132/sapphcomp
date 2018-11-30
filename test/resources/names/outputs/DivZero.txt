@@ -312,16 +312,8 @@ object rekt_0 {
 
   case class h_11(v: Int, v: String) extends hi_0
 
-  def hello_0(): Int = {
-    val hi_1: Int =
-      0;
-    5 match {
-      case h_12 =>
-        0
-    };
-    0
-  }
-
+  val i_7: String =
+    55;
   (5 / 0)
 }
 
