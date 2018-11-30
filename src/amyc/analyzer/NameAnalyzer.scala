@@ -260,24 +260,25 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
 
         case N.Call(qname, args) =>
           val (owner,name) = getName(qname, module);
-          val id = (table.getFunction(owner,name), table.getConstructor(owner,name)) match {
-            case (Some((sym,sig)),_) =>
-              if(sig.argTypes.size != args.size) {
-                fatal(
-                  s"Function $qname expects ${sig.argTypes.size} arguments, found ${args.size}",
-                  expr.position);
-              }
-              sym
-            case (None, Some((sym,sig))) => 
-              if(sig.argTypes.size != args.size) {
-                fatal(
-                  s"Constructor $qname expects ${sig.argTypes.size} arguments, found ${args.size}",
-                  expr.position)
-              }
-              sym
-            case _ =>
-              fatal(s"Could not find function or constructor $name in module $owner", expr)
-          }
+          val id =
+            (table.getFunction(owner,name), table.getConstructor(owner,name)) match {
+              case (Some((sym,sig)),_) =>
+                if(sig.argTypes.size != args.size) {
+                  fatal(
+                    s"Function $qname expects ${sig.argTypes.size} arguments, found ${args.size}",
+                    expr.position);
+                }
+                sym
+              case (None, Some((sym,sig))) => 
+                if(sig.argTypes.size != args.size) {
+                  fatal(
+                    s"Constructor $qname expects ${sig.argTypes.size} arguments, found ${args.size}",
+                    expr.position)
+                }
+                sym
+              case _ =>
+                fatal(s"Could not find function or constructor $name in module $owner", expr)
+            }
 
           S.Call(id, args.map(transformExpr))
         case N.Sequence(e1,e2) => S.Sequence(transformExpr(e1),transformExpr(e2))

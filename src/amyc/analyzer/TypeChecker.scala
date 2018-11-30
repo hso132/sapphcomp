@@ -39,15 +39,24 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
           case UnitLiteral() => UnitType
         }
       }
+
+      def binaryConstraints(lhs: Expr, rhs: Expr, resType: Type, argType: Type): List[Constraint] = {
+        val fstConstraint = Constraint(resType, expected, e.position)
+        val lhsConstraints = genConstraints(lhs, argType)
+        val rhsConstraints = genConstraints(rhs, argType)
+        fstConstraint :: lhsConstraints ++ rhsConstraints
+      }
       // Integer comparison
       def compConstraints(lhs: Expr, rhs: Expr) = {
-        Constraint(BooleanType, expected, e.position) ::
-          genConstraints(lhs, IntType) ++
-          genConstraints(rhs, IntType)
+        binaryConstraints(lhs, rhs, BooleanType, IntType)
       }
 
       def binaryIntConstraints(lhs: Expr, rhs: Expr) = {
-        Constraint(IntType, expected, e.position) :: genConstraints(lhs, IntType) ++ genConstraints(rhs,IntType)
+        binaryConstraints(lhs, rhs, IntType, IntType)
+      }
+
+      def binaryBooleanConstraints(lhs: Expr, rhs: Expr) = {
+        binaryConstraints(lhs, rhs, BooleanType, BooleanType)
       }
       // This helper returns a list of a single constraint recording the type
       //  that we found (or generated) for the current expression `e`
@@ -67,21 +76,17 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
             genConstraints(thenn, expected) ++
             genConstraints(elze, expected)
           moreConstraints
-        case Equals(lhs, rhs) =>
-          // HINT: Take care to implement the specified Amy semantics
-          val firstArg = TypeVariable.fresh();
-          val secondArg = TypeVariable.fresh();
-          val moreConstraints = genConstraints(lhs, firstArg) ++ genConstraints(rhs, secondArg)
-          Constraint(firstArg, secondArg, lhs.position) :: 
-            Constraint(BooleanType, expected, e.position) ::
-            moreConstraints;
 
+        // Unary operations
         case Neg(arg) =>
           Constraint(IntType, expected, e.position) :: genConstraints(arg,IntType)
+        case Not(arg) =>
+          Constraint(BooleanType, expected, e.position) :: genConstraints(arg, BooleanType)
         case Let(ParamDef(name, tt), value, body) =>
           val bodyType = TypeVariable.fresh();
           Constraint(bodyType, expected, e.position) :: 
             genConstraints(value, tt.tpe) ++ genConstraints(body, bodyType)(env+(name->tt.tpe))
+
 
         // Binary operations on integers
         case Times(lhs, rhs) =>
@@ -104,6 +109,16 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
           compConstraints(lhs,rhs)
         case LessEquals(lhs, rhs) =>
           compConstraints(lhs,rhs)
+
+        // Equality. RHS and LHS have to evaluate to the same type
+        case Equals(lhs, rhs) =>
+          val commonType = TypeVariable.fresh
+          binaryConstraints(lhs, rhs, BooleanType, commonType)
+
+        case And(lhs, rhs) =>
+          binaryBooleanConstraints(lhs, rhs)
+        case Or(lhs, rhs) =>
+          binaryBooleanConstraints(lhs, rhs)
 
         // Sequence; only the second type needs to match expected
         case Sequence(e1,e2) =>
@@ -194,33 +209,36 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
     //  call `typeError` if they are not satisfiable.
     // We consider a set of constraints to be satisfiable exactly if they unify.
     def solveConstraints(constraints: List[Constraint]): Unit = {
+      //println(constraints.length)
+      //constraints.foreach(println)
       constraints match {
         case Nil => ()
         case Constraint(found, expected, pos) :: more =>
           // HINT: You can use the `subst_*` helper above to replace a type variable
           //       by another type in your current set of constraints.
-          if(found == expected) {
-            // Delete useless
-            solveConstraints(more)
-          } else {
-            (found,expected) match {
-                // T = x, T variable
-              case (TypeVariable(id1), TypeVariable(id2)) =>
-                solveConstraints(more :+ constraints.head)
-                // T = x, T constant
-              case (TypeVariable(id), other) => 
-                // Orient
-                solveConstraints(Constraint(expected, found, pos) :: more)
-              case (tpe, TypeVariable(id)) =>
-                solveConstraints(subst_*(constraints,id, tpe))
-              case (type1, type2) =>
-                if(type1 == type2) {
-                  solveConstraints(more)
-                }
-                else {
-                  error(s"Type error; expected $expected, found $found", pos)
-                }
-            }
+          (found,expected) match {
+
+            case (TypeVariable(id), t2: TypeVariable) =>
+              if(id == t2.id) {
+                solveConstraints(more)
+              } else {
+                solveConstraints(subst_*(constraints, id, t2))
+              }
+            case (tpe, TypeVariable(id)) =>
+              solveConstraints(subst_*(constraints,id, tpe))
+            case (TypeVariable(id), other) => 
+              // Orient
+              solveConstraints(Constraint(expected, found, pos) :: more)
+
+            // No type variables
+            case (type1, type2) =>
+              // Delete useless
+              if(type1 == type2) {
+                solveConstraints(more)
+              }
+              else {
+                error(s"Type error; expected $expected, found $found", pos)
+              }
           }
       }
     }
