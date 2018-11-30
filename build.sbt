@@ -17,3 +17,4 @@ lazy val amyc = (project in file("."))
     libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.1",
     testOptions += Tests.Argument(TestFrameworks.JUnit, "-v")
   )
+cancelable in Global := true
