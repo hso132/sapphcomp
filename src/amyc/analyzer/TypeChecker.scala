@@ -238,6 +238,7 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
               }
               else {
                 error(s"Type error; expected $expected, found $found", pos)
+                solveConstraints(more)
               }
           }
       }

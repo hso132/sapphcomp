@@ -22,8 +22,5 @@ object testslol
   assert(!("hi" == "hi"), "string does not equal other string");
   assert(!(Nil() == Nil()), "Nil does not equal nil");
   
-
-
-
   ()
 }

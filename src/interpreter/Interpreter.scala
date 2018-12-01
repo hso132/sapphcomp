@@ -64,55 +64,99 @@ object Interpreter extends Pipeline[(Program, SymbolTable), Unit] {
     // Interprets a function, using evaluations for local variables contained in 'locals'
     // TODO: Complete all missing cases. Look at the given ones for guidance.
     def interpret(expr: Expr)(implicit locals: Map[Identifier, Value]): Value = {
+      def getAndCheckForZero(lhs: Expr, rhs: Expr): (Int, Int) = {
+        val a: Int = interpret(lhs).asInt
+        val b: Int = interpret(rhs).asInt
+        if(b==0) {
+          ctx.reporter.fatal("Division by zero!")
+        }
+        else {
+          (a,b)
+        }
+      }
       expr match {
         case Variable(name) =>
-          ???
+          locals(name)
         case IntLiteral(i) =>
-          ???
+          IntValue(i)
         case BooleanLiteral(b) =>
-          ???
+          BooleanValue(b)
         case StringLiteral(s) =>
-          ???
+          StringValue(s)
         case UnitLiteral() =>
-          ???
+          UnitValue
         case Plus(lhs, rhs) =>
           IntValue(interpret(lhs).asInt + interpret(rhs).asInt)
         case Minus(lhs, rhs) =>
-          ???
+          IntValue(interpret(lhs).asInt - interpret(rhs).asInt)
         case Times(lhs, rhs) =>
-          ???
+          IntValue(interpret(lhs).asInt * interpret(rhs).asInt)
         case Div(lhs, rhs) =>
-          ???
+          val (a,b) = getAndCheckForZero(lhs,rhs)
+          IntValue(a/b)
         case Mod(lhs, rhs) =>
-          ???
+          val (a,b) = getAndCheckForZero(lhs,rhs)
+          IntValue(a%b)
         case LessThan(lhs, rhs) =>
-          ???
+          BooleanValue(interpret(lhs).asInt < interpret(rhs).asInt)
         case LessEquals(lhs, rhs) =>
-          ???
+          BooleanValue(interpret(lhs).asInt <= interpret(rhs).asInt)
         case And(lhs, rhs) =>
-          ???
+          BooleanValue(interpret(lhs).asBoolean && interpret(rhs).asBoolean)
         case Or(lhs, rhs) =>
-          ???
+          BooleanValue(interpret(lhs).asBoolean || interpret(rhs).asBoolean)
         case Equals(lhs, rhs) =>
-          ??? // Hint: Take care to implement Amy equality semantics
+          val interpretedLhs = interpret(lhs)
+          val interpretedRhs = interpret(rhs)
+          val compRes = (interpretedLhs, interpretedRhs) match {
+            case (IntValue(i1), IntValue(i2)) => (i1 == i2)
+            case (BooleanValue(b1), BooleanValue(b2)) => (b1==b2)
+            case (StringValue(_), StringValue(_)) => interpretedLhs eq interpretedRhs
+            case (CaseClassValue(_, _), CaseClassValue(_, _)) => 
+              interpretedLhs eq interpretedRhs
+            case (UnitValue, UnitValue) => true
+            // Should never happen
+            case other => throw new scala.MatchError(other)
+          }
+          BooleanValue(compRes)
         case Concat(lhs, rhs) =>
-          ???
+          StringValue(interpret(lhs).asString + interpret(rhs).asString)
         case Not(e) =>
-          ???
+          BooleanValue(!interpret(e).asBoolean)
         case Neg(e) =>
-          ???
+          IntValue(-interpret(e).asInt)
         case Call(qname, args) =>
-          ???
-          // Hint: Check if it is a call to a constructor first,
           //       then if it is a built-in function (otherwise it is a normal function).
           //       Use the helper methods provided above to retrieve information from the symbol table.
           //       Think how locals should be modified.
+          val interpretedArgs = args map interpret
+          if(isConstructor(qname)) {
+            CaseClassValue(qname, interpretedArgs)
+          } else {
+            val owner = findFunctionOwner(qname)
+            val name = qname.name
+            if(builtIns.contains((owner,name))) {
+              val fct = builtIns((owner,name))
+              fct(interpretedArgs)
+            } else {
+              val funDef: FunDef = findFunction(owner,name)
+              val paramNames: List[Name] = funDef.params.map(_.name)
+              interpret(funDef.body)((paramNames zip interpretedArgs).toMap)
+            }
+          }
         case Sequence(e1, e2) =>
-          ???
+          interpret(e1);
+          interpret(e2)
         case Let(df, value, body) =>
-          ???
+          val assignedValue = interpret(value)
+          interpret(body)(locals+(df.name -> assignedValue))
         case Ite(cond, thenn, elze) =>
-          ???
+          val condResult = interpret(cond).asBoolean
+          if(condResult) {
+            interpret(thenn)
+          } else {
+            interpret(elze)
+          }
         case Match(scrut, cases) =>
           // Hint: We give you a skeleton to implement pattern matching
           //       and the main body of the implementation
@@ -126,19 +170,39 @@ object Interpreter extends Pipeline[(Program, SymbolTable), Unit] {
           def matchesPattern(v: Value, pat: Pattern): Option[List[(Identifier, Value)]] = {
             ((v, pat): @unchecked) match {
               case (_, WildcardPattern()) =>
-                ???
+                Option(List())
               case (_, IdPattern(name)) =>
                 Some(List(name -> v))
               case (IntValue(i1), LiteralPattern(IntLiteral(i2))) =>
-                ???
+                if(i1==i2) {
+                  Some(List())
+                } else {
+                  None
+                }
               case (BooleanValue(b1), LiteralPattern(BooleanLiteral(b2))) =>
-                ??? 
+                if(b1==b2) {
+                  Some(List())
+                } else {
+                  None
+                }
               case (StringValue(_), LiteralPattern(StringLiteral(_))) =>
-                ???
+                None
               case (UnitValue, LiteralPattern(UnitLiteral())) =>
-                ???
+                Some(List())
               case (CaseClassValue(con1, realArgs), CaseClassPattern(con2, formalArgs)) =>
-                ???
+              // Check that the constructors match
+              if(con1 == con2) {
+                val foundArgs = (realArgs zip formalArgs).map({
+                  case (value, pattern) => matchesPattern(value, pattern) })
+                  .filter(_.isDefined).map(_.get)
+                if(foundArgs.length < formalArgs.length) {
+                  None
+                } else {
+                  Some(foundArgs.flatten)
+                }
+              } else {
+                None
+              }
             }
           }
 
@@ -154,7 +218,7 @@ object Interpreter extends Pipeline[(Program, SymbolTable), Unit] {
           ctx.reporter.fatal(s"Match error: ${evS.toString}@${scrut.position}")
 
         case Error(msg) =>
-          ???
+          ctx.reporter.fatal(msg)
       }
     }
 

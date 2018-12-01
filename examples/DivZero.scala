@@ -9,6 +9,6 @@ object rekt
     };
     0
   }*/
-  val i: String = 55;
+//  val i: String = 55;
   5/0
 }

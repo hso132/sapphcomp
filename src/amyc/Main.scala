@@ -4,6 +4,7 @@ import utils._
 import ast._
 import parsing._
 import analyzer._
+import interpreter._
 
 import java.io.File
 
@@ -18,7 +19,8 @@ object Main extends MainHelpers {
       Lexer andThen
       Parser andThen
       NameAnalyzer andThen
-      TypeChecker
+      TypeChecker andThen
+      Interpreter
 
     val files = ctx.files.map(new File(_))
 
