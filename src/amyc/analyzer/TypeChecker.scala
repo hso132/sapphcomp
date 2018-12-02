@@ -113,7 +113,9 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
         // Equality. RHS and LHS have to evaluate to the same type
         case Equals(lhs, rhs) =>
           val commonType = TypeVariable.fresh
-          binaryConstraints(lhs, rhs, BooleanType, commonType)
+          val newConstraints = binaryConstraints(lhs, rhs, BooleanType, commonType)
+          newConstraints.foreach(println(_))
+          newConstraints
 
         case And(lhs, rhs) =>
           binaryBooleanConstraints(lhs, rhs)
@@ -124,7 +126,8 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
         case Sequence(e1,e2) =>
           val e1Type = TypeVariable.fresh;
           val e2Type = TypeVariable.fresh;
-          Constraint(e2Type, expected, e2.position) :: genConstraints(e1, e1Type) ++ genConstraints(e2, e2Type)
+          val e2Constraint = Constraint(e2Type, expected, e2.position) 
+          e2Constraint :: genConstraints(e1, e1Type) ++ genConstraints(e2, e2Type)
 
         case Match(scrut, cases) =>
           // Returns additional constraints from within the pattern with all bindings
@@ -174,15 +177,19 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
           Constraint(lit2Type(lit), expected, lit.position) :: Nil
 
         case Call(qname, args) =>
-          val (sig,extraConstraint) = (table.getFunction(qname),table.getConstructor(qname)) match {
-            // Function call
-            case (Some(sig), None) => (sig, Constraint(sig.retType,expected,e.position))
-            case (None,Some(sig)) => (sig, Constraint(ClassType(sig.parent), expected, e.position))
-            case _ => throw new scala.MatchError(e)
-          }
+          val (sig,extraConstraint) = 
+            (table.getFunction(qname),table.getConstructor(qname)) match {
+              // Function call
+              case (Some(sig), None) =>
+                (sig, Constraint(sig.retType,expected,e.position))
+              // Constructor call
+              case (None,Some(sig)) => 
+                (sig, Constraint(ClassType(sig.parent), expected, e.position))
+              case _ => throw new scala.MatchError(e)
+            }
           val types = sig.argTypes
           val moreConstraints = (args zip types).map(pair => genConstraints(pair._1,pair._2));
-           moreConstraints.flatten
+          extraConstraint :: moreConstraints.flatten
         case h =>
           throw new scala.MatchError(h)
       }
