@@ -114,7 +114,6 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
         case Equals(lhs, rhs) =>
           val commonType = TypeVariable.fresh
           val newConstraints = binaryConstraints(lhs, rhs, BooleanType, commonType)
-          newConstraints.foreach(println(_))
           newConstraints
 
         case And(lhs, rhs) =>
@@ -216,8 +215,6 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
     //  call `typeError` if they are not satisfiable.
     // We consider a set of constraints to be satisfiable exactly if they unify.
     def solveConstraints(constraints: List[Constraint]): Unit = {
-      //println(constraints.length)
-      //constraints.foreach(println)
       constraints match {
         case Nil => ()
         case Constraint(found, expected, pos) :: more =>
